@@ -24,7 +24,7 @@ impl Engine {
         for result in rdr.deserialize() {
             if let Err(_e) = self.process_row(result) {
                 // commenting out for better performance
-                eprintln!("Error: {}", _e)
+                // eprintln!("Error: {}", _e)
             }
         }
         Ok(())
@@ -40,12 +40,12 @@ impl Engine {
         Ok(())
     }
 
-    fn output(self, round_digits: i64) -> anyhow::Result<()> {
+    fn output(self, round_digits: u32) -> anyhow::Result<()> {
         let mut wtr = csv::Writer::from_writer(std::io::stdout());
         for mut c in self.clients.into_values() {
-            c.available = c.available.round(round_digits);
-            c.held = c.held.round(round_digits);
-            c.total = c.total.round(round_digits);
+            c.available = c.available.round_dp(round_digits);
+            c.held = c.held.round_dp(round_digits);
+            c.total = c.total.round_dp(round_digits);
             wtr.serialize(c)?;
         }
 
@@ -57,13 +57,13 @@ impl Engine {
 mod tests {
     use super::*;
     use crate::tx::TxType;
-    use bigdecimal::{BigDecimal, FromPrimitive};
+    use rust_decimal::{Decimal, prelude::FromPrimitive};
     use rand::{thread_rng, Rng};
     use serde::{Deserialize, Serialize};
 
-    fn random() -> BigDecimal {
-        let r: BigDecimal = thread_rng().gen_range(1..1_000_000_000).into();
-        r / 10000
+    fn random() -> Decimal {
+        let r: Decimal = thread_rng().gen_range(1..1_000_000_000).into();
+        r / Decimal::from(10_000)
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -84,14 +84,14 @@ mod tests {
         client_id: u16,
         #[serde(rename = "tx")]
         tx_id: u32,
-        amount: Option<BigDecimal>,
+        amount: Option<Decimal>,
     }
 
     fn assert_example_result(engine: &mut Engine) {
         let client = engine.clients.get(&1).unwrap();
-        assert_eq!(client.available, BigDecimal::from_f32(1.5).unwrap());
+        assert_eq!(client.available, Decimal::from_f32(1.5).unwrap());
         assert_eq!(client.held, 0.into());
-        assert_eq!(client.total, BigDecimal::from_f32(1.5).unwrap());
+        assert_eq!(client.total, Decimal::from_f32(1.5).unwrap());
         let client = engine.clients.get(&2).unwrap();
         assert_eq!(client.available, 2.into());
         assert_eq!(client.held, 0.into());
@@ -142,13 +142,13 @@ mod tests {
         let mut engine = Engine::default();
         engine.process_file("test_samples/nonexistent.csv".into())?;
         let client = engine.clients.get(&1).unwrap();
-        assert_eq!(client.available, BigDecimal::from_f32(0.49).unwrap());
+        assert_eq!(client.available, Decimal::from_f32(0.49).unwrap());
         assert_eq!(client.held, 0.into());
-        assert_eq!(client.total, BigDecimal::from_f32(0.49).unwrap());
+        assert_eq!(client.total, Decimal::from_f32(0.49).unwrap());
         let client = engine.clients.get(&2).unwrap();
-        assert_eq!(client.available, BigDecimal::from_f32(1.14).unwrap());
-        assert_eq!(client.held, BigDecimal::from_f32(3.14).unwrap());
-        assert_eq!(client.total, BigDecimal::from_f32(4.28).unwrap());
+        assert_eq!(client.available, Decimal::from_f32(1.14).unwrap());
+        assert_eq!(client.held, Decimal::from_f32(3.14).unwrap());
+        assert_eq!(client.total, Decimal::from_f32(4.28).unwrap());
         Ok(())
     }
 

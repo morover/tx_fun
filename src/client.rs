@@ -1,5 +1,5 @@
 use anyhow::{anyhow, bail, ensure};
-use bigdecimal::{BigDecimal, Zero};
+use rust_decimal::{Decimal, prelude::Zero};
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -18,7 +18,7 @@ impl Default for DepositState {
 
 #[derive(Debug)]
 struct Deposit {
-    amount: BigDecimal,
+    amount: Decimal,
     state: DepositState,
 }
 
@@ -34,9 +34,9 @@ impl Deposit {
 #[derive(Debug, Serialize, Default)]
 pub(crate) struct Client {
     client_id: u16,
-    pub(crate) available: BigDecimal,
-    pub(crate) held: BigDecimal,
-    pub(crate) total: BigDecimal,
+    pub(crate) available: Decimal,
+    pub(crate) held: Decimal,
+    pub(crate) total: Decimal,
     locked: bool,
     #[serde(skip)]
     // storing only deposits, as only them may be disputed
@@ -47,15 +47,15 @@ impl Client {
     pub(crate) fn create(client_id: u16) -> Self {
         Client {
             client_id,
-            available: BigDecimal::zero(),
-            held: BigDecimal::zero(),
-            total: BigDecimal::zero(),
+            available: Decimal::zero(),
+            held: Decimal::zero(),
+            total: Decimal::zero(),
             locked: false,
             deposits: Default::default(),
         }
     }
 
-    pub(crate) fn deposit(&mut self, tx_id: u32, amount: BigDecimal) -> anyhow::Result<()> {
+    pub(crate) fn deposit(&mut self, tx_id: u32, amount: Decimal) -> anyhow::Result<()> {
         ensure!(amount >= 0.into(), "Negative amount {}", amount);
         self.deposits.insert(
             // tx ids are unique
@@ -71,7 +71,7 @@ impl Client {
         Ok(())
     }
 
-    pub(crate) fn withdraw(&mut self, amount: BigDecimal) -> anyhow::Result<()> {
+    pub(crate) fn withdraw(&mut self, amount: Decimal) -> anyhow::Result<()> {
         ensure!(amount >= 0.into(), "Negative amount {}", amount);
         self.ensure_unlocked()?;
         ensure!(
@@ -147,7 +147,7 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bigdecimal::{BigDecimal, FromPrimitive};
+    use rust_decimal::{Decimal, prelude::FromPrimitive};
 
     trait ClientIs {
         fn is(&self, available: f64, held: f64, total: f64);
@@ -156,16 +156,16 @@ mod tests {
 
     impl ClientIs for Client {
         fn is(&self, available: f64, held: f64, total: f64) {
-            assert_eq!(self.available, BigDecimal::from_f64(available).unwrap());
-            assert_eq!(self.held, BigDecimal::from_f64(held).unwrap());
-            assert_eq!(self.total, BigDecimal::from_f64(total).unwrap());
+            assert_eq!(self.available, Decimal::from_f64(available).unwrap());
+            assert_eq!(self.held, Decimal::from_f64(held).unwrap());
+            assert_eq!(self.total, Decimal::from_f64(total).unwrap());
             assert_ne!(self.locked, true);
         }
 
         fn is_locked(&self, available: f64, held: f64, total: f64) {
-            assert_eq!(self.available, BigDecimal::from_f64(available).unwrap());
-            assert_eq!(self.held, BigDecimal::from_f64(held).unwrap());
-            assert_eq!(self.total, BigDecimal::from_f64(total).unwrap());
+            assert_eq!(self.available, Decimal::from_f64(available).unwrap());
+            assert_eq!(self.held, Decimal::from_f64(held).unwrap());
+            assert_eq!(self.total, Decimal::from_f64(total).unwrap());
             assert!(self.locked);
         }
     }
@@ -174,9 +174,9 @@ mod tests {
     #[test]
     fn should_properly_handle_big_deposit() -> anyhow::Result<()> {
         let mut c = Client::default();
-        c.deposit(1, BigDecimal::from_f64(494475.4876).unwrap())?;
+        c.deposit(1, Decimal::from_f64(494475.4876).unwrap())?;
         c.is(494475.4876, 0., 494475.4876);
-        c.withdraw(BigDecimal::from_f64(96658.5182).unwrap())?;
+        c.withdraw(Decimal::from_f64(96658.5182).unwrap())?;
         c.is(494475.4876 - 96658.5182, 0., 494475.4876 - 96658.5182);
         Ok(())
     }
@@ -184,9 +184,9 @@ mod tests {
     #[test]
     fn should_properly_handle_small_deposit() -> anyhow::Result<()> {
         let mut c = Client::default();
-        c.deposit(1, BigDecimal::from_f64(3.14).unwrap())?;
+        c.deposit(1, Decimal::from_f64(3.14).unwrap())?;
         c.is(3.14, 0., 3.14);
-        c.deposit(2, BigDecimal::from_f64(1.14).unwrap())?;
+        c.deposit(2, Decimal::from_f64(1.14).unwrap())?;
         c.is(4.28, 0., 4.28);
         c.dispute(&1)?;
         c.is(1.14, 3.14, 4.28);

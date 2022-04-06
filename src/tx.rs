@@ -1,5 +1,5 @@
 use anyhow::bail;
-use bigdecimal::BigDecimal;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -8,8 +8,8 @@ use crate::client::Client;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub(crate) enum TxType {
-    Deposit { amount: BigDecimal },
-    Withdrawal { amount: BigDecimal },
+    Deposit { amount: Decimal },
+    Withdrawal { amount: Decimal },
     Dispute,
     Resolve,
     Chargeback,
