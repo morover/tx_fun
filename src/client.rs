@@ -170,6 +170,29 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn should_properly_handle_big_deposit() -> anyhow::Result<()> {
+        let mut c = Client::default();
+        c.deposit(1, BigDecimal::from_f64(494475.4876).unwrap())?;
+        c.is(494475.4876, 0., 494475.4876);
+        c.withdraw(BigDecimal::from_f64(96658.5182).unwrap())?;
+        c.is(494475.4876 - 96658.5182, 0., 494475.4876 - 96658.5182);
+        Ok(())
+    }
+
+    #[test]
+    fn should_properly_handle_small_deposit() -> anyhow::Result<()> {
+        let mut c = Client::default();
+        c.deposit(1, BigDecimal::from_f64(3.14).unwrap())?;
+        c.is(3.14, 0., 3.14);
+        c.deposit(2, BigDecimal::from_f64(1.14).unwrap())?;
+        c.is(4.28, 0., 4.28);
+        c.dispute(&1)?;
+        c.is(1.14, 3.14, 4.28);
+        Ok(())
+    }
+
     #[test]
     fn should_properly_handle_deposit() -> anyhow::Result<()> {
         let mut c: Client = Client::default();
