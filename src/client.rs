@@ -6,7 +6,7 @@ use std::collections::HashMap;
 #[derive(Debug, PartialEq)]
 enum DepositState {
     Ok,
-    Disputed,
+    Dispute,
 }
 
 impl Default for DepositState {
@@ -125,7 +125,7 @@ impl Client {
         );
         self.available -= &deposit.amount;
         self.held += &deposit.amount;
-        deposit.state = DepositState::Disputed;
+        deposit.state = DepositState::Dispute;
         Ok(())
     }
 
@@ -139,7 +139,7 @@ impl Client {
             .deposits
             .get_mut(tx_id)
             .ok_or(anyhow!("Deposit not found {}", tx_id))?;
-        deposit.ensure_state(DepositState::Disputed)?;
+        deposit.ensure_state(DepositState::Dispute)?;
         self.available += &deposit.amount;
         // no need to check held funds, bc we had checked state already
         self.held -= &deposit.amount;
@@ -158,7 +158,7 @@ impl Client {
             .deposits
             .get_mut(tx_id)
             .ok_or(anyhow!("Deposit not found {}", tx_id))?;
-        deposit.ensure_state(DepositState::Disputed)?;
+        deposit.ensure_state(DepositState::Dispute)?;
         ensure!(
             self.total >= deposit.amount,
             "Account {}: Not enough funds in total: {} > {}",
@@ -319,7 +319,7 @@ mod tests {
         c.is(0., 3., 3.);
         assert_eq!(
             c.dispute(&3).unwrap_err().to_string(),
-            "Deposit in state Disputed != Ok"
+            "Deposit in state Dispute != Ok"
         );
         Ok(())
     }
@@ -335,7 +335,7 @@ mod tests {
         c.is(5., 0., 5.);
         assert_eq!(
             c.resolve(&3).unwrap_err().to_string(),
-            "Deposit in state Ok != Disputed"
+            "Deposit in state Ok != Dispute"
         );
         Ok(())
     }
@@ -351,7 +351,7 @@ mod tests {
         c.is(5., 0., 5.);
         assert_eq!(
             c.chargeback(&3).unwrap_err().to_string(),
-            "Deposit in state Ok != Disputed"
+            "Deposit in state Ok != Dispute"
         );
         Ok(())
     }

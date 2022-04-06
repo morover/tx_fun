@@ -11,12 +11,12 @@
 
 ### Transactions
 
-* Deposit tx might be in three states: `ok`, `disputed`.
+* Deposit tx might be in three states: `ok`, `dispute`.
 * Dispute is allowed only on Deposit tx which state is `ok`. 
 * Other tx types cannot be disputed, so are always in `ok` state.
-* Dispute moves tx from `ok` to `disputed`.
-* Resolve and Chargeback are allowed only on Deposit tx in `disputed` state.
-* Resolve moves tx from `disputed` to `ok` which allows for further Disputes on the same Deposit tx.
+* Dispute moves tx from `ok` to `dispute`.
+* Resolve and Chargeback are allowed only on Deposit tx in `dispute` state.
+* Resolve moves tx from `dispute` to `ok` which allows for further Disputes on the same Deposit tx.
 * Chargeback locks account disabling any further txs on it, so no need to introduce separate state.
 
 ### Amounts
