@@ -7,7 +7,6 @@ use std::collections::HashMap;
 enum DepositState {
     Ok,
     Disputed,
-    ChargedBack,
 }
 
 impl Default for DepositState {
@@ -169,7 +168,6 @@ impl Client {
         );
         self.total -= &deposit.amount;
         self.held -= &deposit.amount;
-        deposit.state = DepositState::ChargedBack;
         self.locked = true;
         Ok(())
     }
