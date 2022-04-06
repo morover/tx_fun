@@ -15,9 +15,9 @@
 * Deposit tx might be in three states: `ok`, `disputed`, `chargedback`.
 * Dispute is allowed only on Deposit tx which state is `ok`. 
 * Other tx types cannot be disputed, so are always in `ok` state.
-* Resolve and Chargeback are alowed only on tx in `disputed` state.
-* Resolve moves tx from `disputed` to `ok` which allows for another Dispute on the same tx.
-* Chagreback moves tx from `disputed` to `chargedback` and disallows any further txs on this tx.
+* Resolve and Chargeback are allowed only on Deposit tx in `disputed` state.
+* Resolve moves tx from `disputed` to `ok` which allows for another Dispute on the same Deposit tx.
+* Chargeback moves tx from `disputed` to `chargedback` and disallows any further txs on this Deposit tx.
 
 ### Amounts
 I assume proper amount values are non-negative.
@@ -26,7 +26,7 @@ I assume proper amount values are non-negative.
 It is stated to be a decimal with a precision of up to four places only,
 but it is not specified how big can amounts be.
 
-For the sake of correctness let's use ~~d128~~ BigDecimal for storing amounts.
+For the sake of correctness let's use BigDecimal for storing amounts.
 
 ## Performance
 I've commented printing out error messages to the stderr for better performance.
