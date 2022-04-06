@@ -1,4 +1,4 @@
-use anyhow::bail;
+use anyhow::anyhow;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -11,9 +11,9 @@ pub(crate) struct Engine {
 }
 
 impl Engine {
-    pub(crate) fn run(mut self, input_file: PathBuf) -> anyhow::Result<()> {
+    pub(crate) fn run(&mut self, input_file: PathBuf) -> anyhow::Result<()> {
         self.process_file(input_file)?;
-        Ok(self.output(4)?)
+        Ok(self.output()?)
     }
 
     fn process_file(&mut self, input_file: PathBuf) -> anyhow::Result<()> {
@@ -30,22 +30,15 @@ impl Engine {
         Ok(())
     }
 
-    fn process_row(&mut self, result: csv::Result<Tx>) -> anyhow::Result<()> {
-        let tx: Tx = result?;
-        let tx_id = tx.tx_id;
-        let tx_type = tx.tx_type.clone();
-        if let Err(e) = tx.process(&mut self.clients) {
-            bail!("Cannot process {:?}({}); {}", tx_type, tx_id, e)
-        }
-        Ok(())
+    fn process_row(&mut self, row: csv::Result<Tx>) -> anyhow::Result<()> {
+        let tx = row?;
+        tx.process(&mut self.clients)
+            .map_err(|e| anyhow!("Cannot process {:?}({}); {}", tx.tx_type, tx.tx_id, e))
     }
 
-    fn output(self, round_digits: u32) -> anyhow::Result<()> {
+    fn output(&self) -> anyhow::Result<()> {
         let mut wtr = csv::Writer::from_writer(std::io::stdout());
-        for mut c in self.clients.into_values() {
-            c.available = c.available.round_dp(round_digits);
-            c.held = c.held.round_dp(round_digits);
-            c.total = c.total.round_dp(round_digits);
+        for c in self.clients.values() {
             wtr.serialize(c)?;
         }
 
@@ -59,32 +52,11 @@ mod tests {
     use crate::tx::TxType;
     use rust_decimal::{Decimal, prelude::FromPrimitive};
     use rand::{thread_rng, Rng};
-    use serde::{Deserialize, Serialize};
+    use serde::Serialize;
 
     fn random() -> Decimal {
         let r: Decimal = thread_rng().gen_range(1..1_000_000_000).into();
         r / Decimal::from(10_000)
-    }
-
-    #[derive(Clone, Debug, Serialize, Deserialize)]
-    #[serde(rename_all = "snake_case")]
-    enum TxTypeS {
-        Deposit,
-        Withdrawal,
-        Dispute,
-        Resolve,
-        Chargeback,
-    }
-
-    #[derive(Clone, Debug, Serialize, Deserialize)]
-    struct TxS {
-        #[serde(rename = "type")]
-        tx_type: TxTypeS,
-        #[serde(rename = "client")]
-        client_id: u16,
-        #[serde(rename = "tx")]
-        tx_id: u32,
-        amount: Option<Decimal>,
     }
 
     fn assert_example_result(engine: &mut Engine) {
@@ -146,6 +118,10 @@ mod tests {
         assert_eq!(client.held, 0.into());
         assert_eq!(client.total, Decimal::from_f32(0.49).unwrap());
         let client = engine.clients.get(&2).unwrap();
+        assert_eq!(client.available, Decimal::from_f32(0.).unwrap());
+        assert_eq!(client.held, Decimal::from_f32(0.).unwrap());
+        assert_eq!(client.total, Decimal::from_f32(0.).unwrap());
+        let client = engine.clients.get(&3).unwrap();
         assert_eq!(client.available, Decimal::from_f32(1.14).unwrap());
         assert_eq!(client.held, Decimal::from_f32(3.14).unwrap());
         assert_eq!(client.total, Decimal::from_f32(4.28).unwrap());
@@ -157,6 +133,7 @@ mod tests {
     fn performance_test() -> anyhow::Result<()> {
         let mut engine = Engine::default();
         let mut rng = thread_rng();
+
         for _ in 0..10_000_000 {
             let tx_type = match rng.gen_range(0..5) {
                 0 => TxType::Deposit { amount: random() },
@@ -175,38 +152,44 @@ mod tests {
                 tx_id,
             };
 
-            if let Err(e) = engine.process_row(csv::Result::Ok(tx)) {
-                eprintln!("Error: {}", e)
+            if let Err(_e) = engine.process_row(csv::Result::Ok(tx)) {
+                // eprintln!("Error: {}", _e)
             }
         }
-        Ok(engine.output(4)?)
+        Ok(())
     }
 
     #[test]
     #[ignore]
     fn generate_test_file() -> anyhow::Result<()> {
+        #[derive(Clone, Debug, Serialize)]
+        pub(crate) struct Tx {
+            r#type: String,
+            client: u16,
+            tx: u32,
+            amount: String,
+        }
+
         let mut wtr = csv::Writer::from_path("tst.csv")?;
         let mut rng = thread_rng();
         for _ in 0..1_000_000 {
-            let (tx_types, amount) = match rng.gen_range(0..5) {
-                0 => (TxTypeS::Deposit, Some(random())),
-                1 => (TxTypeS::Withdrawal, Some(random())),
-                2 => (TxTypeS::Dispute, None),
-                3 => (TxTypeS::Resolve, None),
-                4 => (TxTypeS::Chargeback, None),
+            let (tx_type, amount) = match rng.gen_range(0..5) {
+                0 => ("deposit", format!("{:0.4}", random())),
+                1 => ("withdrawal", format!("{:0.4}", random())),
+                2 => ("dispute", "".into()),
+                3 => ("resolve", "".into()),
+                4 => ("chargeback", "".into()),
                 _ => unreachable!(),
             };
-            let client_id = rng.gen_range(1..1_000);
-            let tx_id = rng.gen_range(1..10_000);
+            let client = rng.gen_range(1..1_000);
+            let tx: u32 = rng.gen_range(1..10_000);
 
-            let txs = TxS {
-                tx_type: tx_types,
-                client_id,
-                tx_id,
+            wtr.serialize(Tx {
+                r#type: tx_type.to_string(),
+                client,
+                tx,
                 amount,
-            };
-
-            wtr.serialize(&txs)?;
+            })?
         }
         Ok(wtr.flush()?)
     }

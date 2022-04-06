@@ -17,9 +17,9 @@ resolve, 2, 2,
 dispute, 2, 2,
 chargeback, 2, 2,
 withdrawal, 2, 9, 1.0
-deposit, 2, 10, 3.14
-dispute, 2, 10,
+deposit, 3, 10, 3.14
+dispute, 3, 10,
 withdrawal, 1, 11, 1.11
-resolve, 2, 10,
-deposit, 2, 12, 1.14
-dispute, 2, 10,
+resolve, 3, 10,
+deposit, 3, 12, 1.14
+dispute, 3, 10,
