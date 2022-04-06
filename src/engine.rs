@@ -1,4 +1,4 @@
-use anyhow::bail;
+use anyhow::anyhow;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -11,9 +11,9 @@ pub(crate) struct Engine {
 }
 
 impl Engine {
-    pub(crate) fn run(mut self, input_file: PathBuf) -> anyhow::Result<()> {
+    pub(crate) fn run(&mut self, input_file: PathBuf) -> anyhow::Result<()> {
         self.process_file(input_file)?;
-        Ok(self.output(4)?)
+        Ok(self.output()?)
     }
 
     fn process_file(&mut self, input_file: PathBuf) -> anyhow::Result<()> {
@@ -24,28 +24,21 @@ impl Engine {
         for result in rdr.deserialize() {
             if let Err(_e) = self.process_row(result) {
                 // commenting out for better performance
-                eprintln!("Error: {}", _e)
+                // eprintln!("Error: {}", _e)
             }
         }
         Ok(())
     }
 
-    fn process_row(&mut self, result: csv::Result<Tx>) -> anyhow::Result<()> {
-        let tx: Tx = result?;
-        let tx_id = tx.tx_id;
-        let tx_type = tx.tx_type.clone();
-        if let Err(e) = tx.process(&mut self.clients) {
-            bail!("Cannot process {:?}({}); {}", tx_type, tx_id, e)
-        }
-        Ok(())
+    fn process_row(&mut self, row: csv::Result<Tx>) -> anyhow::Result<()> {
+        let tx = row?;
+        tx.process(&mut self.clients)
+            .map_err(|e| anyhow!("Cannot process {:?}({}); {}", tx.tx_type, tx.tx_id, e))
     }
 
-    fn output(self, round_digits: i64) -> anyhow::Result<()> {
+    fn output(&self) -> anyhow::Result<()> {
         let mut wtr = csv::Writer::from_writer(std::io::stdout());
-        for mut c in self.clients.into_values() {
-            c.available = c.available.round(round_digits);
-            c.held = c.held.round(round_digits);
-            c.total = c.total.round(round_digits);
+        for c in self.clients.values() {
             wtr.serialize(c)?;
         }
 
@@ -56,53 +49,32 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::amount::{Amount, AmountConv};
     use crate::tx::TxType;
-    use bigdecimal::{BigDecimal, FromPrimitive};
     use rand::{thread_rng, Rng};
-    use serde::{Deserialize, Serialize};
+    use serde::Serialize;
 
-    fn random() -> BigDecimal {
-        let r: BigDecimal = thread_rng().gen_range(1..1_000_000_000).into();
-        r / 10000
+    fn random() -> Amount {
+        AmountConv::from_u64(thread_rng().gen_range(1..1_000_000_000))
     }
 
-    #[derive(Clone, Debug, Serialize, Deserialize)]
-    #[serde(rename_all = "snake_case")]
-    enum TxTypeS {
-        Deposit,
-        Withdrawal,
-        Dispute,
-        Resolve,
-        Chargeback,
-    }
-
-    #[derive(Clone, Debug, Serialize, Deserialize)]
-    struct TxS {
-        #[serde(rename = "type")]
-        tx_type: TxTypeS,
-        #[serde(rename = "client")]
-        client_id: u16,
-        #[serde(rename = "tx")]
-        tx_id: u32,
-        amount: Option<BigDecimal>,
-    }
-
-    fn assert_example_result(engine: &mut Engine) {
+    fn assert_example_result(engine: &mut Engine) -> anyhow::Result<()> {
         let client = engine.clients.get(&1).unwrap();
-        assert_eq!(client.available, BigDecimal::from_f32(1.5).unwrap());
-        assert_eq!(client.held, 0.into());
-        assert_eq!(client.total, BigDecimal::from_f32(1.5).unwrap());
+        assert_eq!(client.available, 15000);
+        assert_eq!(client.held, 00000);
+        assert_eq!(client.total, 15000);
         let client = engine.clients.get(&2).unwrap();
-        assert_eq!(client.available, 2.into());
-        assert_eq!(client.held, 0.into());
-        assert_eq!(client.total, 2.into());
+        assert_eq!(client.available, 20000);
+        assert_eq!(client.held, 00000);
+        assert_eq!(client.total, 20000);
+        Ok(())
     }
 
     #[test]
     fn should_handle_example() -> anyhow::Result<()> {
         let mut engine = Engine::default();
         engine.process_file("test_samples/example.csv".into())?;
-        assert_example_result(&mut engine);
+        assert_example_result(&mut engine)?;
         Ok(())
     }
 
@@ -110,7 +82,7 @@ mod tests {
     fn should_handle_spaceless_format() -> anyhow::Result<()> {
         let mut engine = Engine::default();
         engine.process_file("test_samples/spaceless.csv".into())?;
-        assert_example_result(&mut engine);
+        assert_example_result(&mut engine)?;
         Ok(())
     }
 
@@ -118,7 +90,7 @@ mod tests {
     fn should_handle_spacefull_format() -> anyhow::Result<()> {
         let mut engine = Engine::default();
         engine.process_file("test_samples/spacefull.csv".into())?;
-        assert_example_result(&mut engine);
+        assert_example_result(&mut engine)?;
         Ok(())
     }
 
@@ -127,13 +99,13 @@ mod tests {
         let mut engine = Engine::default();
         engine.process_file("test_samples/wrong.csv".into())?;
         let client = engine.clients.get(&1).unwrap();
-        assert_eq!(client.available, 1.into());
-        assert_eq!(client.held, 0.into());
-        assert_eq!(client.total, 1.into());
+        assert_eq!(client.available, 10000);
+        assert_eq!(client.held, 00000);
+        assert_eq!(client.total, 10000);
         let client = engine.clients.get(&2).unwrap();
-        assert_eq!(client.available, 2.into());
-        assert_eq!(client.held, 0.into());
-        assert_eq!(client.total, 2.into());
+        assert_eq!(client.available, 20000);
+        assert_eq!(client.held, 00000);
+        assert_eq!(client.total, 20000);
         Ok(())
     }
 
@@ -142,13 +114,13 @@ mod tests {
         let mut engine = Engine::default();
         engine.process_file("test_samples/nonexistent.csv".into())?;
         let client = engine.clients.get(&1).unwrap();
-        assert_eq!(client.available, BigDecimal::from_f32(0.49).unwrap());
-        assert_eq!(client.held, 0.into());
-        assert_eq!(client.total, BigDecimal::from_f32(0.49).unwrap());
+        assert_eq!(client.available, 04900);
+        assert_eq!(client.held, 00000);
+        assert_eq!(client.total, 04900);
         let client = engine.clients.get(&2).unwrap();
-        assert_eq!(client.available, BigDecimal::from_f32(1.14).unwrap());
-        assert_eq!(client.held, BigDecimal::from_f32(3.14).unwrap());
-        assert_eq!(client.total, BigDecimal::from_f32(4.28).unwrap());
+        assert_eq!(client.available, 11400);
+        assert_eq!(client.held, 31400);
+        assert_eq!(client.total, 42800);
         Ok(())
     }
 
@@ -157,6 +129,7 @@ mod tests {
     fn performance_test() -> anyhow::Result<()> {
         let mut engine = Engine::default();
         let mut rng = thread_rng();
+
         for _ in 0..10_000_000 {
             let tx_type = match rng.gen_range(0..5) {
                 0 => TxType::Deposit { amount: random() },
@@ -175,38 +148,44 @@ mod tests {
                 tx_id,
             };
 
-            if let Err(e) = engine.process_row(csv::Result::Ok(tx)) {
-                eprintln!("Error: {}", e)
+            if let Err(_e) = engine.process_row(csv::Result::Ok(tx)) {
+                // eprintln!("Error: {}", _e)
             }
         }
-        Ok(engine.output(4)?)
+        Ok(engine.output()?)
     }
 
     #[test]
     #[ignore]
     fn generate_test_file() -> anyhow::Result<()> {
-        let mut wtr = csv::Writer::from_path("tst.csv")?;
+        #[derive(Clone, Debug, Serialize)]
+        pub(crate) struct Tx {
+            r#type: String,
+            client: u16,
+            tx: u32,
+            amount: String,
+        }
+
+        let mut wtr = csv::Writer::from_path("tst1.csv")?;
         let mut rng = thread_rng();
         for _ in 0..1_000_000 {
-            let (tx_types, amount) = match rng.gen_range(0..5) {
-                0 => (TxTypeS::Deposit, Some(random())),
-                1 => (TxTypeS::Withdrawal, Some(random())),
-                2 => (TxTypeS::Dispute, None),
-                3 => (TxTypeS::Resolve, None),
-                4 => (TxTypeS::Chargeback, None),
+            let (tx_type, amount) = match rng.gen_range(0..5) {
+                0 => ("deposit", format!("{:0.4}", random())),
+                1 => ("withdrawal", format!("{:0.4}", random())),
+                2 => ("dispute", "".into()),
+                3 => ("resolve", "".into()),
+                4 => ("chargeback", "".into()),
                 _ => unreachable!(),
             };
-            let client_id = rng.gen_range(1..1_000);
-            let tx_id = rng.gen_range(1..10_000);
+            let client = rng.gen_range(1..1_000);
+            let tx: u32 = rng.gen_range(1..10_000);
 
-            let txs = TxS {
-                tx_type: tx_types,
-                client_id,
-                tx_id,
+            wtr.serialize(Tx {
+                r#type: tx_type.to_string(),
+                client,
+                tx,
                 amount,
-            };
-
-            wtr.serialize(&txs)?;
+            })?
         }
         Ok(wtr.flush()?)
     }

@@ -5,12 +5,18 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ['f64']
+bigdec = ["bigdecimal/serde"]
+f64 = []
+
 [dependencies]
 anyhow = "1.0.56"
 csv = "1.1"
-bigdecimal = { version = "0.3", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 structopt = "0.3.26"
+bigdecimal = { version = "0.3", features=["serde"], optional = true }
 
 [dev-dependencies]
 rand = "0.8.5"
+bigdecimal = { version = "0.3", features=["serde"] }

@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use structopt::StructOpt;
 
+mod amount;
 mod client;
 mod engine;
 mod tx;
